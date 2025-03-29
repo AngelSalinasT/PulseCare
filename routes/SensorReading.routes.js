@@ -1,23 +1,14 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const sensorReadingController = require("../controllers/sensorReadingController");
-const { body } = require("express-validator");
+const readingController = require('../controllers/SensorReading.controller');
 
-// Middleware de validación
-const validateReading = [
-  body("patientId").notEmpty().isString(),
-  body("deviceId").notEmpty().isString(),
-  body("Signal").notEmpty().isNumeric(),
-  body("BPW").optional().isNumeric(),
-  body("BPW_Avg").optional().isNumeric(),
-];
+// POST /api/readings - Crear nueva lectura
+router.post('/', readingController.createReading);
 
-// Rutas
-router.post("/", validateReading, sensorReadingController.createReading);
-router.get("/patient/:patientId", sensorReadingController.getReadingsByPatient);
-router.get(
-  "/patient/:patientId/filter",
-  sensorReadingController.getReadingsBySignalRange
-);
+// GET /api/readings - Obtener lecturas con filtros opcionales
+router.get('/', readingController.getReadings);
+
+// GET /api/readings/export - Exportar a CSV
+router.get('/export', readingController.exportToCSV);
 
 module.exports = router;

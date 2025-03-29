@@ -1,5 +1,5 @@
-const Patient = require("../models/Patient");
-const SensorReading = require("../models/SensorReading");
+const Patient = require("../models/Patient.model");
+const SensorReading = require("../models/SensorReading.model");
 
 // Obtener todos los pacientes asignados a un doctor
 exports.getAssignedPatients = async (req, res) => {

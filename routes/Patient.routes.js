@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const patientController = require('../controllers/patientController');
+const patientController = require('../controllers/Patient.controller');
 
 // Obtener lecturas del paciente
 router.get('/:patientId/readings', patientController.getMyReadings);

@@ -1,59 +1,76 @@
-const SensorReading = require("../models/SensorReading");
+const SensorReading = require("../models/SensorReading.model");
+const { Parser } = require("json2csv");
 
-// Crear una nueva lectura
 exports.createReading = async (req, res) => {
   try {
-    const { patientId, deviceId, Signal, BPW, BPW_Avg } = req.body;
+    const { Signal, BPW, BPW_Avg, device_id } = req.body;
 
-    const reading = new SensorReading({
-      patient: patientId,
-      deviceId,
+    // Validación básica
+    if (Signal === undefined || BPW === undefined || BPW_Avg === undefined) {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
+    }
+
+    const newReading = new SensorReading({
       Signal,
-      BPW: BPW || 0, // Valor por defecto si no se envía
-      BPW_Avg: BPW_Avg || 0,
+      BPW,
+      BPW_Avg,
+      device_id,
       // timestamp se añade automáticamente
     });
 
-    await reading.save();
-    res.status(201).json(reading);
+    await newReading.save();
+    res.status(201).json(newReading);
   } catch (error) {
-    res.status(400).json({
-      error: "Error al guardar la lectura",
-      details: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 };
 
-// Obtener todas las lecturas de un paciente
-exports.getReadingsByPatient = async (req, res) => {
+exports.getReadings = async (req, res) => {
   try {
-    const readings = await SensorReading.find({
-      patient: req.params.patientId,
-    }).sort({ timestamp: -1 }); // Orden descendente por fecha
+    const { device_id, start, end, limit = 100 } = req.query;
+    const filter = {};
+
+    if (device_id) filter.device_id = device_id;
+
+    if (start && end) {
+      filter.timestamp = {
+        $gte: new Date(start),
+        $lte: new Date(end),
+      };
+    }
+
+    const readings = await SensorReading.find(filter)
+      .sort({ timestamp: -1 })
+      .limit(Number(limit));
 
     res.json(readings);
   } catch (error) {
-    res.status(500).json({
-      error: "Error al obtener lecturas",
-      details: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 };
 
-// Obtener lecturas filtradas por señal (ejemplo avanzado)
-exports.getReadingsBySignalRange = async (req, res) => {
+exports.exportToCSV = async (req, res) => {
   try {
-    const { min, max } = req.query;
-    const readings = await SensorReading.find({
-      patient: req.params.patientId,
-      Signal: { $gte: parseInt(min), $lte: parseInt(max) },
-    });
+    const data = await SensorReading.find({}).lean();
 
-    res.json(readings);
+    const fields = [
+      "Signal",
+      "BPW",
+      "BPW_Avg",
+      "device_id",
+      {
+        label: "Timestamp",
+        value: "timestamp",
+      },
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(data);
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(`sensor_readings_${new Date().toISOString()}.csv`);
+    res.send(csv);
   } catch (error) {
-    res.status(500).json({
-      error: "Error al filtrar lecturas",
-      details: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 };

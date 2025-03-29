@@ -1,4 +1,4 @@
-const SensorReading = require("../models/SensorReading");
+const SensorReading = require("../models/SensorReading.model");
 
 // Obtener lecturas propias (para el paciente)
 exports.getMyReadings = async (req, res) => {

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const doctorController = require('../controllers/doctorController');
+const doctorController = require('../controllers/Doctor.controller');
 
 // Obtener pacientes del doctor
 router.get('/:doctorId/patients', doctorController.getAssignedPatients);

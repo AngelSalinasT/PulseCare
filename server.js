@@ -29,12 +29,10 @@ app.timeout = 600000; // 10 minutos timeout
 // Variable de conexión
 let dbConnection;
 
-// Ruta de exportación ajustada a tu formato exacto
 app.get('/export-pulso-csv', async (req, res) => {
   console.log('⚡ Iniciando exportación de datos de pulso...');
   
   try {
-    // Verificar/conectar a MongoDB
     if (!dbConnection || dbConnection.readyState !== 1) {
       dbConnection = await connectDB();
     }
@@ -42,7 +40,6 @@ app.get('/export-pulso-csv', async (req, res) => {
     const db = dbConnection.db;
     const collection = db.collection('pulso');
 
-    // Verificar si la colección tiene documentos
     const documentCount = await collection.countDocuments();
     if (documentCount === 0) {
       console.log('⚠️ Colección "pulso" está vacía');
@@ -53,66 +50,58 @@ app.get('/export-pulso-csv', async (req, res) => {
     }
     console.log(`📊 Documentos a exportar: ${documentCount}`);
 
-    // Configuración CSV EXACTA para tu formato
+    // Definir los campos con date y time separados
     const fields = [
-      {
-        label: 'ID',
-        value: '_id'
+      { label: 'ID', value: '_id' },
+      { label: 'signal', value: 'signal' },
+      { label: 'bpm', value: 'bpm' },
+      { label: 'avg_bpm', value: 'avg_bpm' },
+      { label: 'avg_edge', value: 'avg_edge' },
+      { label: 'date', value: row => {
+          const date = new Date(row.timestamp);
+          return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        } 
       },
-      {
-        label: 'signal',
-        value: 'signal'
-      },
-      {
-        label: 'bpm',
-        value: 'bpm'
-      },
-      {
-        label: 'avg_bpm',
-        value: 'avg_bpm'
-      },
-      {
-        label: 'avg_edge',
-        value: 'avg_edge'
-      },
-      {
-        label: 'timestamp',
-        value: row => new Date(row.timestamp).toISOString()
+      { label: 'time', value: row => {
+          const date = new Date(row.timestamp);
+          return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+        } 
       }
     ];
 
-    // Parser con formato exacto
-    const parser = new Parser({ 
+    // Crear el parser sin repetir cabeceras en cada chunk
+    const parser = new Parser({
       fields,
-      header: true,
-      delimiter: ',',
-      quote: '"',
-      withBOM: true // Para Excel compatibilidad
+      delimiter: ',', 
+      quote: '"', 
+      header: true,  // Solo generar el header una vez
+      withBOM: true 
     });
 
-    // Stream de transformación optimizado
+    let headerEmitted = false; // Para evitar repetir la cabecera
+
     const transformStream = new Transform({
       objectMode: true,
       transform(chunk, encoding, callback) {
         try {
-          // Formateo especial para el timestamp si es necesario
-          if (chunk.timestamp && typeof chunk.timestamp === 'string') {
-            chunk.timestamp = chunk.timestamp.replace(',', '.');
+          const data = parser.parse([chunk]); // Convertir solo una fila a CSV
+          if (!headerEmitted) {
+            this.push(data + '\n'); // Incluir cabecera en el primer chunk
+            headerEmitted = true;
+          } else {
+            this.push(data.split('\n')[1] + '\n'); // Omitir la cabecera en las siguientes líneas
           }
-          this.push(parser.parse([chunk]));
           callback();
         } catch (error) {
           console.error('Error transformando documento:', chunk._id, error);
-          callback(null); // Saltar documento problemático
+          callback(null);
         }
       }
     });
 
-    // Configurar respuesta
     res.header('Content-Type', 'text/csv; charset=utf-8');
     res.attachment(`pulso_export_${new Date().toISOString().split('T')[0]}.csv`);
 
-    // Stream para conteo y progreso
     let processed = 0;
     const progressStream = new Transform({
       objectMode: true,
@@ -126,13 +115,11 @@ app.get('/export-pulso-csv', async (req, res) => {
       }
     });
 
-    // Crear cursor optimizado
     const cursor = collection.find({})
       .sort({ timestamp: -1 })
       .batchSize(1000)
-      .maxTimeMS(300000); // 5 minutos timeout para la consulta
+      .maxTimeMS(300000);
 
-    // Pipeline completo
     cursor.stream()
       .pipe(progressStream)
       .pipe(transformStream)
